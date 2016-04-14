@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Linq;
 using CoreGraphics;
+using CoreLocation;
 using CustomRenderer.iOS;
 using FormsMapSamples;
 using FormsMapSamples.iOS;
@@ -18,17 +21,31 @@ namespace CustomRenderer.iOS
 	{
 		UIView customPinView;
 		List<CustomPin> customPins;
+		MKPolygonRenderer polygonRenderer;
+		IMKOverlay blockOverlay;
 
 		protected override void OnElementChanged (ElementChangedEventArgs<View> e)
 		{
 			base.OnElementChanged (e);
 
 			if (e.OldElement != null) {
+				var formsMap = (CustomMap)e.OldElement;
 				var nativeMap = Control as MKMapView;
 				nativeMap.GetViewForAnnotation = null;
+
 				nativeMap.CalloutAccessoryControlTapped -= OnCalloutAccessoryControlTapped;
 				nativeMap.DidSelectAnnotationView -= OnDidSelectAnnotationView;
 				nativeMap.DidDeselectAnnotationView -= OnDidDeselectAnnotationView;
+
+				var recognizer = nativeMap.GestureRecognizers.FirstOrDefault (g => g is UILongPressGestureRecognizer);
+
+				if (recognizer != null) {
+					nativeMap.RemoveGestureRecognizer (recognizer);
+				}
+
+				nativeMap.OverlayRenderer = null;
+
+				formsMap.RegionSelected -= regionSelected;
 			}
 
 			if (e.NewElement != null) {
@@ -37,9 +54,72 @@ namespace CustomRenderer.iOS
 				customPins = formsMap.CustomPins;
 
 				nativeMap.GetViewForAnnotation = GetViewForAnnotation;
+
 				nativeMap.CalloutAccessoryControlTapped += OnCalloutAccessoryControlTapped;
 				nativeMap.DidSelectAnnotationView += OnDidSelectAnnotationView;
 				nativeMap.DidDeselectAnnotationView += OnDidDeselectAnnotationView;
+
+				nativeMap.AddGestureRecognizer (new UILongPressGestureRecognizer (pressed));
+
+				nativeMap.OverlayRenderer = GetOverlayRenderer;
+
+				CLLocationCoordinate2D [] coords = new CLLocationCoordinate2D [formsMap.ShapeCoordinates.Count];
+
+				int index = 0;
+				foreach (var position in formsMap.ShapeCoordinates) {
+					coords [index] = new CLLocationCoordinate2D (position.Latitude, position.Longitude);
+					index++;
+				}
+
+				var blockOverlay = MKPolygon.FromCoordinates (coords);
+				nativeMap.AddOverlay (blockOverlay);
+
+				formsMap.RegionSelected += regionSelected;
+			}
+		}
+
+		void pressed (UILongPressGestureRecognizer gestureRecognizer)
+		{
+			var formsMap = (CustomMap)Element;
+
+			if (gestureRecognizer.State == UIGestureRecognizerState.Ended) {
+				formsMap.OnPressed (true);
+			} else if (gestureRecognizer.State == UIGestureRecognizerState.Began) {
+				formsMap.OnPressed ();
+			}
+		}
+
+		MKOverlayRenderer GetOverlayRenderer (MKMapView mapView, IMKOverlay overlay)
+		{
+			if (polygonRenderer == null) {
+				polygonRenderer = new MKPolygonRenderer (overlay as MKPolygon);
+				polygonRenderer.FillColor = UIColor.Red;
+				polygonRenderer.StrokeColor = UIColor.Blue;
+				polygonRenderer.Alpha = 0.4f;
+				polygonRenderer.LineWidth = 9;
+			}
+
+			return polygonRenderer;
+		}
+
+		void regionSelected (object sender, EventArgs e)
+		{
+			var formsMap = (CustomMap)Element;
+			var nativeMap = Control as MKMapView;
+
+			if (blockOverlay != null && formsMap.ShapeCoordinates.Count == 0) {
+				nativeMap.RemoveOverlay (blockOverlay);
+			} else {
+				CLLocationCoordinate2D [] coords = new CLLocationCoordinate2D [formsMap.ShapeCoordinates.Count];
+
+				int index = 0;
+				foreach (var position in formsMap.ShapeCoordinates) {
+					coords [index] = new CLLocationCoordinate2D (position.Latitude, position.Longitude);
+					index++;
+				}
+
+				blockOverlay = MKPolygon.FromCoordinates (coords);
+				nativeMap.AddOverlay (blockOverlay);
 			}
 		}
 

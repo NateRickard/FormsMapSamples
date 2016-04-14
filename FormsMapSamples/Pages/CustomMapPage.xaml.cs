@@ -23,9 +23,9 @@ namespace FormsMapSamples
 				Url = "http://xamarin.com/about/"
 			};
 
-			customMap.CustomPins = new List<CustomPin> { pin };
+			customMap.CustomPins.Add (pin);
 			customMap.Pins.Add (pin.Pin);
-			customMap.MoveToRegion (MapSpan.FromCenterAndRadius (new Position (37.79752, -122.40183), Distance.FromMiles (1.0)));
+			customMap.MoveToRegion (MapSpan.FromCenterAndRadius (new Position (37.79752, -122.40183), Distance.FromMiles (0.3)));
 		}
 	}
 }
